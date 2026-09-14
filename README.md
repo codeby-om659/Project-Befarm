@@ -46,7 +46,7 @@ A FastAPI-based web application backend designed to streamline agricultural mand
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/codeby-om/Project-Befarm.git](https://github.com/codeby-om/Project-Befarm.git)
+   git clone [https://github.com/codeby-om659/Project-Befarm.git](https://github.com/codeby-om659/Project-Befarm.git)
    cd Project-Befarm
    ```
 2. **Navigate to backend directory:**
