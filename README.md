@@ -54,9 +54,9 @@ A FastAPI-based web application backend designed to streamline agricultural mand
    cd frontened
    ```
 3. **Activate Virtual Environment:**
-  ```powershell
-  .\venv\Scripts\Activate.ps1
-  ```
+   ```powershell
+   .\venv\Scripts\Activate.ps1
+   ```
 4. **Install Dependenceies:**
    ```bash
    pip install fastapi uvicorn mysql-connector-python pydantic requests
