@@ -53,7 +53,7 @@ A FastAPI-based web application backend designed to streamline agricultural mand
    ```bash
    cd frontened
    ```
-3.**Activate Virtual Environment:**
+3. **Activate Virtual Environment:**
   ```powershell
   .\venv\Scripts\Activate.ps1
   ```
