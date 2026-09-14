@@ -23,12 +23,97 @@ FAST2SMS_API_KEY="CJcQDPtYox7MZFI0l63HvyzKj81NLbTEqg9mAnpUW5hOwBfRks8BpXDSbZ0FgG
 
 class PhoneRequest(BaseModel):
     mobile_number:str
-    
+class StatusUpdateSchems(BaseModel):
+    crop_id:int
+    status:str
+
+class admin_login(BaseModel):
+    admin_id:str
+    admin_password:str
+
+Admin_credit={
+    "om123":"om@123"
+}
+
+
 
 class VerifyOTPRequest(BaseModel):
     mobile_number:str
     otp:str
 
+@app.post("/admin/update-status/")
+def update_crop_status(data:StatusUpdateSchems):
+    connection=mysql.connector.connect(**MYSQL_CONFIG)
+    cursor= connection.cursor()
+    try:
+        
+        if data.status =="approved":
+            now=datetime.now()
+            date_part=now.strftime("%y%m%d") #current date
+            rand_part=str(uuid.uuid4())[:4].upper()
+        
+            token_id=f"TOK-{date_part}-{rand_part}"
+            query= """
+                UPDATE farmers_crops
+                SET status= %s,token_id=%s
+                WHERE crop_id=%s
+            """
+            cursor.execute(query,(token_id,data.crop_id))
+            message="Booking Approved and token Generrated"
+        elif data.status=="reject":
+            query="""
+                UPDATE farmers_crops
+                SET status='%stoken_id=NULL
+                WHEREcrop_id=%s
+            """
+            cursor.execute(query,(data.status,token_id,data.crop_id,))
+            message="Booking Rejected"
+        else:
+            query="UPDATE farmers_crops SET status=%s WHERE crop_id=%s"
+            cursor.execute(query,(data,status,data.crop_id))
+        connection.commit()   
+            
+        return {
+            "status": "success",
+            "message": "Booking approved and Token generated successfully",
+            "token_id":token_id
+        }
+    except mysql.connector.Error as err:
+        connection.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error:{err}")
+    except Exception as e:
+        connection.rollback()
+        raise HTTPException(status_code=500, detail=f"server error:{str(e)}")
+
+@app.get("/farmer/token/{farmer_id}")
+def get_farmer_token(farmer_id: str):
+    connection = mysql.connector.connect(**MYSQL_CONFIG)
+    cursor = connection.cursor(dictionary=True)
+    
+    try:
+        query = """
+            SELECT crop_id, crop_type, estimated_quintal, slot_date, status, token_id 
+            FROM farmers_crops 
+            WHERE farmer_id = %s 
+            ORDER BY crop_id DESC LIMIT 1
+        """
+        cursor.execute(query, (farmer_id,))
+        result = cursor.fetchone()
+        return {"status": "success", "data": result}
+    finally:
+        cursor.close()
+        connection.close()
+         
+@app.post("/Admin-Registration/")
+def VerifyAdmin(Admin:admin_login):
+    if Admin.admin_id in Admin_credit:
+        if Admin_credit[Admin.admin_id]== Admin.admin_password:
+            return {"status":"success","message":"Login successFully"}
+
+    raise HTTPException(status_code=401,detail="Invalid Id or Passwrod")
+        
+    
+    
     #otp send karne ka endpoiint
 @app.post("/send-otp/")
 async def send_otp(request: PhoneRequest):
@@ -75,7 +160,13 @@ async def verify_otp(request:VerifyOTPRequest):
         raise HTTPException(status_code=400,detail="pehle otp gnerate kare")
     if stored_otp==request.otp:
         del otp_db[request.mobile_number]#verification ke bad delete kare
-        return {"status":"success","message":"phone number successfully vrified"}
+
+        connection=mysql.connector.connect(**MYSQL_CONFIG)
+        cursor= connection.cursor(dictionary=True)
+        cursor.execute("SELECT *FROM farmers WHERE mobile_number=%s",(request.mobile_number,))
+        farmer=cursor.fetchone()
+        is_registered =True if farmer else False
+        return {"status":"success","is_registered":is_registered,"message":"phone number successfully vrified"}
     else:
         raise HTTPException(status_code=400,detail="galat otp fir se try kare")
 
@@ -110,6 +201,7 @@ class Cropcreate(BaseModel):
     farmer_id:str
     crop_type:str
     estimated_quintal:float
+    status:int
     
 
 #api Endpoint
@@ -117,8 +209,34 @@ class Cropcreate(BaseModel):
 def home():
     return{"message":"mandi portal API is running"}
 
+@app.get("/admin/booking/")
+async def get_admin_bookings():
+    try:
+        connection=mysql.connector.connect(**MYSQL_CONFIG)
+        cursor= connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM farmers_crops ORDERR BY crop_id DESC")
+        bookings=cursor.fetchall()
+
+        toatal_bookings=len(bookings)
+
+        total_quantity=sum(float(item.get("estimated_quintal")or 0.0)for item in bookings)
+        #Activate token Count (jinka status "approned"hai aur token_id generate hai)
+        active_token=len([b for b in bookings if str(b.get("status")).lower()=="approved"])
+        cursor.close()
+        connection.close()
+        return {
+            "status":"success",
+            "total_bookings":toatal_bookings,
+            "total_quantity":total_quantity,
+            "active_tokes":active_token,
+            "bookings":bookings
+        }
+    except mysql.connector.Error as err:
+        raise HTTPException(status_code=500,detail=f"Database error:{err}")
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=f"server error{str(e)}")
 #end point1:Register new farmer
-@app.post("/register-farmer")
+@app.post("/register-farmer/")
 def register_farmer(farmer:farmerCreate):
     db=get_db()
     cursor=db.cursor()
@@ -146,26 +264,24 @@ def register_farmer(farmer:farmerCreate):
         db.close()
     
 #endpoint 2 create
-@app.post("/book-crop-slot")
+@app.post("/book-crop-slot/")
 def book_slot(crop:Cropcreate):
     db=get_db()
     cursor=db.cursor()
     #random unique token generate,from date and time,uuid
     #format:TOK-YYYYMMDD-RANDOM
-    now=datetime.now()
-    date_part=now.strftime("%y%m%d") #current date
-    rand_part=str(uuid.uuid4())[:4].upper()
+    
 
-    generated_token=f"TOK-{date_part}-{rand_part}"
+    
     query="""
-    INSERT INTO farmers_crops(farmer_id,crop_type,estimated_quintal,token_id)
+    INSERT INTO farmers_crops(farmer_id,crop_type,estimated_quintal)
     VALUES(%s,%s,%s,%s)
     """
     values=(
         crop.farmer_id,
         crop.crop_type,
-        crop.estimated_quintal,
-        generated_token
+        crop.estimated_quintal
+        
     )
     try:
         cursor.execute(query,values)
@@ -173,7 +289,6 @@ def book_slot(crop:Cropcreate):
         return {
             "status":"Success",
             "message":"crop slot booked successfully",
-            "token_id": generated_token,
             "farmer_id":crop.farmer_id                 
         }
     except mysql.connector.Error as err:
@@ -202,6 +317,14 @@ def get_farmer_crops(farmer_id:str):
         "farmer_id":farmer_id,
         "total_crops":len(crops),
         "crops_data":crops
-    }  
+    }
+
+        
+
+    
+
+
+
+    
 
 
