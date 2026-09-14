@@ -48,3 +48,23 @@ A FastAPI-based web application backend designed to streamline agricultural mand
    ```bash
    git clone [https://github.com/codeby-om/Project-Befarm.git](https://github.com/codeby-om/Project-Befarm.git)
    cd Project-Befarm
+   ```
+2. **Navigate to backend directory:**
+   ```bash
+   cd frontened
+   ```
+3.**Activate Virtual Environment:**
+  ```powershell
+  .\venv\Scripts\Activate.ps1
+  ```
+4. **Install Dependenceies:**
+   ```bash
+   pip install fastapi uvicorn mysql-connector-python pydantic requests
+   ```
+5. **Run the Server:**
+   ```bash
+   uvicorn project:app --reload
+   ```
+   
+
+  
